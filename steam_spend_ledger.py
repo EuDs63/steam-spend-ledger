@@ -17,7 +17,9 @@ DATE_COLUMNS = {"date", "日期", "时间", "transaction date", "交易日期"}
 ITEM_COLUMNS = {"item", "项目", "名称", "description", "说明", "商品"}
 TYPE_COLUMNS = {"type", "类型", "transaction type", "交易类型"}
 AMOUNT_COLUMNS = {"total", "amount", "金额", "总计", "price", "费用"}
-AMOUNT_RE = re.compile(r"(?P<sign>[-+])?\s*(?P<currency>[$¥￥€£]|[A-Z]{3})?\s*(?P<number>[0-9][0-9,]*(?:\.[0-9]+)?)")
+AMOUNT_RE = re.compile(
+    r"(?P<sign>[-+−])?\s*(?P<currency>[$¥￥€£楼]|[A-Z]{3})?\s*(?P<number>[0-9][0-9,]*(?:\.[0-9]+)?)"
+)
 
 
 @dataclass(frozen=True)
@@ -47,6 +49,10 @@ def find_column(headers: list[str], candidates: set[str]) -> str | None:
 
 def parse_date(value: str) -> str:
     text = value.strip()
+    chinese_match = re.search(r"(20\d{2}|19\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日", text)
+    if chinese_match:
+        return date(int(chinese_match.group(1)), int(chinese_match.group(2)), int(chinese_match.group(3))).isoformat()
+
     formats = ["%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d", "%b %d, %Y", "%B %d, %Y", "%d %b, %Y", "%d %B, %Y"]
     for fmt in formats:
         try:
@@ -61,10 +67,12 @@ def parse_date(value: str) -> str:
 
 def parse_amount(value: str) -> tuple[str, Decimal]:
     text = value.strip().replace("−", "-")
+    text = text.replace("–", "-").replace("￥", "¥")
     match = AMOUNT_RE.search(text)
     if not match:
         raise ValueError(f"无法识别金额: {value!r}")
     currency = match.group("currency") or "UNKNOWN"
+    currency = {"￥": "¥", "楼": "¥"}.get(currency, currency)
     number = match.group("number").replace(",", "")
     try:
         amount = Decimal(number)
@@ -207,4 +215,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
